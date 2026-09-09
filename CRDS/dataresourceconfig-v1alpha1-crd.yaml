@@ -1,0 +1,314 @@
+# =============================================================================
+# DataResourceConfig — Custom Resource Definition (CRD)
+# =============================================================================
+#
+# WHAT IS A CRD?
+# A CRD (Custom Resource Definition) extends the Kubernetes API with a new
+# resource type. Once this CRD is installed (kubectl apply -f this-file.yaml),
+# the Kubernetes API server learns about a new kind of object called
+# "DataResourceConfig". Users can then create instances of it, and operators
+# (like ours) can watch for changes and react to them.
+#
+# WHAT DOES THIS CRD DO?
+# A DataResourceConfig declares that a set of data resources in Databricks
+# should be made available to the ODA Canvas. When a user creates a
+# DataResourceConfig object, our operator detects it and creates DependentAPI
+# objects labelled as data-resource dependencies to consuming components that 
+# point to Databricks Managed MCP endpoints — making the data discoverable
+# and accessible to AI agents in the Canvas.
+#
+# HOW IT FITS IN THE ODA CANVAS:
+# The ODA Canvas uses CRDs to manage the lifecycle of telecom components:
+#   - Component CRD -> managed by the Component Operator
+#   - ExposedAPI CRD -> managed by API Management Operators
+#   - DependentAPI CRD -> managed by Dependency Management Operator
+#   - DataResourceConfig CRD (THIS ONE) -> managed by our Databricks Operator
+#
+# REFERENCE:
+# - ADR-005/ADR-007 in https://github.com/tmforum-oda/ai-canvas-architecture
+# - ExposedAPI spec: https://github.com/tmforum-oda/oda-canvas
+# - DependentAPI spec: https://github.com/tmforum-oda/oda-canvas
+# =============================================================================
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  # The name MUST be <plural>.<group> — this is a Kubernetes convention
+  name: dataresourceconfigs.oda.tmforum.org
+spec:
+  # All ODA Canvas CRDs use this API group
+  group: oda.tmforum.org
+  # "Namespaced" means each DataResourceConfig lives in a specific namespace.
+  # This matches how ODA Components are namespaced (one namespace per component).
+  scope: Namespaced
+
+  names:
+    kind: DataResourceConfig            # The resource type name (like "Pod" or "Service")
+    listKind: DataResourceConfigList    # Used when listing multiple resources
+    plural: dataresourceconfigs         # URL path: /apis/oda.tmforum.org/v1alpha1/dataresourceconfigs
+    singular: dataresourceconfig        # Used in kubectl commands: kubectl get dataresourceconfig <name>
+    shortNames:
+      - drc                             # Shorthand: kubectl get drc
+
+  versions:
+    - name: v1alpha1
+      # "served: true" means the API server will accept requests for this version.
+      # "storage: true" means this version is what's stored in etcd (the K8s database).
+      served: true
+      storage: true
+
+      # The schema defines what fields a DataResourceConfig can have.
+      # Kubernetes validates all objects against this schema before storing them.
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: >
+            DataResourceConfig declares data resources hosted on an external
+            data platform (e.g. Databricks) that should be exposed to the
+            ODA Canvas via Managed MCP endpoints. The Databricks Data Operator
+            watches these objects and creates corresponding DependentAPI CRDs.
+          properties:
+            # ---- spec: the desired state (what the user declares) ----
+            spec:
+              type: object
+              description: >
+                Specification of the data resources to expose. Declares which
+                Databricks workspace hosts the data and which resources
+                (tables, indexes, Genie spaces, functions) should be made
+                available as MCP endpoints.
+              required:
+                - provider
+                - workspace
+                - dependentDataResources
+              properties:
+
+                provider:
+                  type: string
+                  enum:
+                    - databricks
+                  description: >
+                    The data platform provider. Currently only "databricks" is
+                    supported. The operator skips any DataResourceConfig with
+                    a different provider, allowing future operators to handle
+                    other platforms (e.g. Snowflake, BigQuery).
+
+                workspace:
+                  type: object
+                  description: >
+                    Connection details for the Databricks workspace that hosts
+                    the data resources.
+                  required:
+                    - host
+                  properties:
+                    host:
+                      type: string
+                      description: >
+                        Full URL of the Databricks workspace
+                        (e.g. "https://my-workspace.cloud.databricks.com").
+                        Used to construct Managed MCP endpoint URLs.
+                    authSecretRef:
+                      type: string
+                      description: >
+                        Name of a Kubernetes Secret in the same namespace that
+                        contains OAuth credentials (client_id, client_secret)
+                        for authenticating to this workspace. If omitted, the
+                        operator assumes credentials are managed externally
+                        (e.g. via workspace identity federation).
+
+                dependentDataResources:
+                  type: array
+                  description: >
+                    List of external data resources consumed by the Component as MCP endpoints.
+                    Each resource becomes one DependentAPI CRD instance with dependencyKind=data-resource that
+                    other Canvas components (agents) can discover and use.
+                  minItems: 1
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - accessType
+                    properties:
+                      name:
+                        type: string
+                        description: >
+                          Logical name for this resource. Used as part of the
+                          DependentAPI name and for dependency resolution.
+                          Must be unique within this DataResourceConfig.
+                        pattern: "^[a-z0-9][a-z0-9-]*[a-z0-9]$"
+                      id:
+                        type: string
+                        description: >
+                          Data product identifier from an external catalog or
+                          governance system (e.g. "DP-NET-001"). Optional but
+                          recommended for traceability and lineage. Per ADR-007.
+                      dataProductType:
+                        type: string
+                        enum:
+                          - table
+                          - vectorDb
+                          - stream
+                          - featureStore
+                        description: >
+                          Platform-neutral classification of the data resource,
+                          per ADR-007. Describes what the data is, independent
+                          of the MCP access pattern used to reach it:
+                          - table: Tabular data (Delta table, view)
+                          - vectorDb: Vector search index
+                          - stream: Streaming data source
+                          - featureStore: Feature store table
+                      accessType:
+                        type: string
+                        enum:
+                          - sql
+                          - vector-search
+                          - genie
+                          - functions
+                        description: >
+                          Type of Databricks Managed MCP server to use:
+                          - sql: Query tables via natural language -> SQL
+                          - vector-search: Semantic search over a vector index
+                          - genie: Natural language data exploration via Genie
+                          - functions: Execute Unity Catalog functions as tools
+                      description:
+                        type: string
+                        description: >
+                          Human-readable description of what this resource
+                          provides. Displayed in the Canvas Resource and Service Inventory
+                          so agents can decide whether to use it.
+
+                      # --- Type-specific fields ---
+                      # Only one of these should be populated, matching the "type" field.
+
+                      catalogRef:
+                        type: object
+                        description: >
+                          Unity Catalog reference for the data resource. Identifies
+                          the catalog, schema, and optionally the specific object
+                          (table, view, index) being exposed. Per ADR-007.
+                        properties:
+                          catalog:
+                            type: string
+                            description: Unity Catalog name (e.g. "tmforum")
+                          schema:
+                            type: string
+                            description: Schema within the catalog (e.g. "oda_canvas_telco")
+                          object:
+                            type: string
+                            description: >
+                              Specific object name within the schema (e.g. table
+                              name, view name, index name). Per ADR-007.
+
+                      index:
+                        type: object
+                        description: >
+                          Vector Search index reference. Required when type is
+                          "vector-search". The catalog/schema/indexName are used
+                          to construct the MCP endpoint URL.
+                        properties:
+                          catalog:
+                            type: string
+                          schema:
+                            type: string
+                          indexName:
+                            type: string
+
+                      genieSpaceId:
+                        type: string
+                        description: >
+                          Genie Space ID. Required when type is "genie".
+                          Find this in the Genie Space URL in the Databricks UI.
+
+                      functions:
+                        type: array
+                        description: >
+                          List of Unity Catalog functions to expose. Required
+                          when type is "functions". Each function becomes its
+                          own DependentAPI (MCP tool).
+                        items:
+                          type: object
+                          required:
+                            - catalog
+                            - schema
+                            - functionName
+                          properties:
+                            catalog:
+                              type: string
+                            schema:
+                              type: string
+                            functionName:
+                              type: string
+
+            # ---- status: the observed state (written by the operator) ----
+            status:
+              type: object
+              description: >
+                Current status of this DataResourceConfig, written by the
+                Databricks Data Operator. Users should not edit this section.
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - Pending     # Operator has seen it but hasn't finished processing
+                    - Ready       # All DependentAPIs created successfully
+                    - Error       # Something went wrong (see message)
+                    - Skipped     # Provider doesn't match (not "databricks")
+                  description: >
+                    Overall lifecycle phase of this DataResourceConfig.
+                message:
+                  type: string
+                  description: >
+                    Human-readable message about the current state, especially
+                    useful when phase is "Error".
+                resourceCount:
+                  type: integer
+                  description: >
+                    Number of DependentAPI CRDs created from this config.
+                endpoints:
+                  type: array
+                  description: >
+                    Details of each MCP endpoint that was created.
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Logical name of the resource
+                      accessType:
+                        type: string
+                        description: MCP endpoint type (sql, vector-search, etc.)
+                      mcpUrl:
+                        type: string
+                        description: Full URL of the Managed MCP endpoint
+                      status:
+                        type: string
+                        description: Status of this individual endpoint
+                      dependentApiName:
+                        type: string
+                        description: Name of the generated DependentAPI resource.
+
+      # Enable the /status subresource. This means:
+      # 1. Users can't accidentally modify status (it's a separate API endpoint)
+      # 2. The operator updates status without triggering its own update handlers
+      # 3. Standard Kubernetes convention for all operators
+      subresources:
+        status: {}
+
+      # These columns appear when you run "kubectl get dataresourceconfigs"
+      # They give a quick summary without needing "kubectl describe"
+      additionalPrinterColumns:
+        - name: Provider
+          type: string
+          jsonPath: .spec.provider
+          description: Data platform provider
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+          description: Current lifecycle phase
+        - name: DependentDataResources
+          type: integer
+          jsonPath: .status.resourceCount
+          description: Number of data dependencies registered
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+          description: Time since creation
