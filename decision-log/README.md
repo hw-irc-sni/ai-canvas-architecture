@@ -44,6 +44,7 @@ Typical ADR status values include:
 | ADR-007 – Data Resource Architecture and Access Patterns | 2026-03-10 | Proposed | ADR-007-data-resource-architecture.md | Project Foundation |
 | ADR-008 - Proxy Pattern for External Agent and Tool Integration | 2026-03-17 | Proposed | ADR-008-proxy-pattern-external-integration.md | Project Foundation|
 | ADR-009 – TMFC060 Knowledge Management as the Canvas Knowledge and Ontology Provider | 2026-11-22 | Proposed | [ADR-009-knowledge-and-ontology-provider.md](ADR-009-knowledge-and-ontology-provider.md) | Knowledge Management |
+| ADR-010 – DataResourceConfig Refinement: Data Resource Types, Provider and Consumer Roles, and Provisioning | 2026-11-22 | Proposed | [ADR-010-data-resource-config-refinement.md](ADR-010-data-resource-config-refinement.md) | Knowledge Management |
 
 ---
 
