@@ -43,8 +43,15 @@ Typical ADR status values include:
 | ADR-006 – Model Onboarding and AI Gateway Integration | 2026-03-10 | Proposed | ADR-006-model-onboarding.md | Project Foundation |
 | ADR-007 – Data Resource Architecture and Access Patterns | 2026-03-10 | Proposed | ADR-007-data-resource-architecture.md | Project Foundation |
 | ADR-008 - Proxy Pattern for External Agent and Tool Integration | 2026-03-17 | Proposed | ADR-008-proxy-pattern-external-integration.md | Project Foundation|
+| ADR-008 – Agent Skills (see note 1) | 2026-03-24 | Proposed | [ADR-008-Agent-Skills.md](ADR-008-Agent-Skills.md) | |
 | ADR-009 – TMFC060 Knowledge Management as the Canvas Knowledge and Ontology Provider | 2026-11-22 | Proposed | [ADR-009-knowledge-and-ontology-provider.md](ADR-009-knowledge-and-ontology-provider.md) | Knowledge Management |
 | ADR-010 – DataResourceConfig Refinement: Data Resource Types, Provider and Consumer Roles, and Provisioning | 2026-11-22 | Proposed | [ADR-010-data-resource-config-refinement.md](ADR-010-data-resource-config-refinement.md) | Knowledge Management |
+| ADR-011 – Data Resources in Resource Inventory | 2026-11-22 | Proposed | [ADR-011-data-resources-in-resource-inventory.md](ADR-011-data-resources-in-resource-inventory.md) | Knowledge Management |
+
+**Notes on the index**
+
+1. **ADR-008 is used twice**: `ADR-008-proxy-pattern-external-integration.md` and `ADR-008-Agent-Skills.md`. Both keep their number, so existing references stay valid. New ADRs continue from ADR-009.
+2. The "Doc reference" names of ADR-001 to ADR-007 differ from the actual file names in this folder (for example `ADR-001-agentic-components.md` is `ADR-001-agentic-components-deployment-model.md`). Rows from ADR-009 on link the actual files.
 
 ---
 
